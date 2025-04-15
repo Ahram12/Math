@@ -1,0 +1,103 @@
+import numpy as np
+from numpy import copy
+from numpy import linalg as LA
+from scipy.stats import ortho_group
+import matplotlib.pyplot as plt
+
+#By asusmption A is symmetric, so, diagonalizable 
+def nearest_positive_definite(A: np.array) -> np.array:
+    #Get Eigenvalues,(orthogonal) Eigenvectors of A
+    eigenvalues, eigenvectors = np.linalg.eigh(A)
+
+    #Adjust eigenvalues to form positive definite matrix and recompute the adjusted matrix X that is positive-definite
+    X = (eigenvectors * np.maximum(eigenvalues, 1e-7)).dot(eigenvectors.T)
+
+    return X
+
+#Counts the number of entries that two symmetric matrices differ in sign at each entry
+def sign_error(A: np.array, B: np.array) -> int:
+    n = len(A)
+    count = 0
+    for i in range(n):
+        for j in range(i, n, 1):
+            if A[i][j]*B[i][j] < 0:
+                if i == j:
+                    count += 1
+                else:
+                    count += 2
+    return count 
+
+#Corrupts Positive definite matrix by adding noise to each of the covariances
+def corrupt_mat(A: np.array) -> np.array:
+    n= len(A)
+    B = copy(A)
+
+    for i in range(n):
+        for j in range(i, n, 1):
+            #Generate Gaussian noise with mean 0 and variance 1
+            noise = np.random.normal(0, 1, 1)
+            if i == j:
+                B[i][j] += noise
+            else:
+                B[i][j] += noise
+                B[j][i] += noise
+    
+    return B
+
+
+#Want to test nearest_positive_definite function to see how well it approximates Positive Definite matrices 
+#Generate some number of random Positive Definite Matrices, add noise to covariances, recompute them using above function
+#We then compare using two metrics: (average) sign error and (average) Frobernius norm 
+#We will use this to test the effects from dim = 2 to dim = 10
+num_cases = 100
+dim_sign_error = [0 for _ in range(11)]
+dim_frobern_error = [0 for _ in range(11)]
+
+for dim in range(2, 11, 1):
+    avg_sign_error = 0
+    avg_frobernius_norm = 0.0
+    for _ in range(num_cases):
+        #Compute random orthogonal matrix
+        m = ortho_group.rvs(dim = dim)
+        #Compute ramdom positive eigenvalues
+        y = np.diag(np.random.randint(np.ones((1, dim)), 10)[0])
+        #Use them to compute Positive Definite Matrix
+        mat = np.dot(m.T, np.dot(y, m))
+        #Corrupt the matrix by adding noise to the covariance and then reconstruct it by approximation
+        new_mat = nearest_positive_definite(corrupt_mat(mat))
+        #Compute sign error
+        avg_sign_error += sign_error(new_mat, mat)
+        #Compute difference in terms of Frobernius norm
+        avg_frobernius_norm += LA.norm(new_mat - mat, 'fro')
+        
+    #Compute averages across all examples, for sign_error we also compare it to the total number of independent matrix entries
+    avg_sign_error /= num_cases
+    total_entries = (dim**2 + dim)/2
+    avg_sign_error /= total_entries
+
+    avg_frobernius_norm /= num_cases
+
+    dim_sign_error[dim] = avg_sign_error
+    dim_frobern_error[dim] = avg_frobernius_norm
+
+
+plt.figure(figsize=(10, 6))
+    
+plt.plot([i for i in range(11)],  dim_sign_error, marker='o', linestyle='-', label="Sign Error Rate")
+
+plt.xlabel("Number of Dimensions")
+plt.ylabel("Sign Error Rate")
+plt.title("Sign Error Rate vs. Dimension")
+plt.legend()
+plt.show()
+
+
+plt.figure(figsize=(10, 6))
+    
+plt.plot([i for i in range(11)],  dim_frobern_error, marker='o', linestyle='-', label="Sign Error Rate")
+
+plt.xlabel("Number of Dimensions")
+plt.ylabel("Frobernius Error Rate")
+plt.title("Frobernius Error Rate vs. Dimension")
+plt.legend()
+plt.show()
