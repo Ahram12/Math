@@ -1,0 +1,55 @@
+#Given covariance matrix sigma, extract matrix of standard deviations and produce correlation matrix from it
+def get_correlation_matrix(sigma: np.array) -> (np.array, np.array):
+    std = np.sqrt(np.diagonal(sigma))
+    D = np.diag(np.reciprocal(std))
+    corr = np.dot(D, np.dot(sigma, D))
+    return (np.diag(std), corr)
+
+#Given standard deviations and correlation matrices, computes covariance matrix
+def get_covariance_matrix(std: np.array, corr_matrix: np.array) -> np.array:
+    return np.dot(std, np.dot(corr_matrix, std))
+
+#Define projection onto space of postive-semidefinite matrices. Here, A is by assumption symmetric 
+def project_S(A: np.array) -> np.array:
+    #Get Eigenvalues, (orthogonal) Eigenvectors of A
+    eigenvalues, eigenvectors = np.linalg.eigh(A)
+            
+    #Adjust eigenvalues to form positive semi-definite matrix and recompute the adjusted matrix X that is positive-semidefinite 
+    X = (eigenvectors * np.maximum(eigenvalues, 0)).dot(eigenvectors.T)
+    return X
+
+#Dykstra's projection algorithm to find closest correlation matrix
+def Dykstra(A: np.array, num_iterations: int) -> np.array:
+    y = copy(A)
+    s = np.zeros(np.shape(A))
+
+    for _ in range(num_iterations):
+       r = y - s
+       x = project_S(r)
+       s = x - r
+       y = copy(x)
+       np.fill_diagonal(y, 1)
+       x = copy(y)
+       
+    return x
+
+#Test Case to see if implementation is correct
+num_iterations = 100
+C = np.array([[1,1,0],[1, 1, 1],[0, 1, 1]])
+print(Dykstra(C, num_iterations))
+
+#Testing comparison of the two methods of two methods
+A = np.array([[10,-2,-3],[-2, 3, 5],[-3, 5, 4]])
+#np.array([[10,2,3],[2, 3, 5],[3, 5, 4]])
+std, corr = get_correlation_matrix(A)
+
+num_iterations = 500
+closest_corr = Dykstra(A, num_iterations)
+closest_covar = get_covariance_matrix(std, closest_corr)
+closest_postive_def = nearest_positive_definite(A)
+
+print(LA.norm(A - closest_covar, 'fro'))
+print(LA.norm(A - closest_postive_def, 'fro'))
+
+print(closest_covar)
+print(closest_postive_def)
